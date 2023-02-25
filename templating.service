@@ -1,0 +1,12 @@
+[Unit]
+Description=Gondul Templating
+Documentation=https://github.com/gathering/gondul
+After=network-online.target
+
+[Service]
+ExecStart=/opt/templating/venv/bin/python3 /opt/templating/templating.py -h 0.0.0.0 -p 80 -t /opt/config/templates -c /opt/config/config.yaml
+ExecReload=/usr/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+---
+get:
+  - file:///root/templating/data
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/read/networks
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/read/oplog
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/read/snmp
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/read/switches-management
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/distro-tree
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/config
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/dhcp
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/dhcp-summary
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/ping
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/switches
+  - https://<USER:PW>@gondul.tg23.gathering.org/api/public/switch-state
