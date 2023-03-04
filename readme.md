@@ -45,3 +45,9 @@ get:
   - file:///root/templating/data
   - https://<USER:PW>@gondul.tg23.gathering.org/api/read/networks
 ```
+
+## Example Execute
+
+```
+python3 templating.py -t ../tech-templates/ -c config.yaml
+```

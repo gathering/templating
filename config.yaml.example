@@ -1,6 +1,9 @@
 ---
 get:
+    # Full Path
   - file:///root/templating/data
+    # Relative Path
+  - file://./templating/data
   - https://<USER:PW>@gondul.tg23.gathering.org/api/read/networks
   - https://<USER:PW>@gondul.tg23.gathering.org/api/read/oplog
   - https://<USER:PW>@gondul.tg23.gathering.org/api/read/snmp

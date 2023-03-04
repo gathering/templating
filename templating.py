@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from flask import Flask, request
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, TemplateError
 
+from datetime import datetime
 
 objects = {}
 
@@ -41,7 +42,7 @@ def loadFile(file):
     else:
         sys.exit("File is not either JSON or YAML, exiting")
     with open(file, 'r') as f:
-        d = yaml.load(f.read(), Loader=SafeLoader)
+        d = yaml.load(f.read(), Loader=yaml.CSafeLoader)
         objects[createObjName(file)] = d
 
 def getEndpoint(uri: str) -> dict:
@@ -58,31 +59,26 @@ def loadUri(u):
 
 def load(i):
     if i.scheme == "file":
-        if os.path.isdir(i.path):
-            for subdir, dirs, files in os.walk(i.path):
-                for file in files:
+        path = os.path.normpath(os.getcwd() + i.path)
+        if os.path.isdir(path):
+            for subdir, dirs, file in os.walk(path):
                     loadFile(os.path.join(subdir, file))
-        elif os.path.isfile(i.path):
-            loadFile(i.path)
+        elif os.path.isfile(path):
+            loadFile(path)
     elif i.scheme == "https" or i.scheme == "http":
         loadUri(i)
 
 
 def load_conf_file(config_file):
    with open(config_file, "r") as f:
-       config = yaml.load(f.read(), Loader=SafeLoader)
+       config = yaml.load(f.read(), Loader=yaml.CSafeLoader)
    return config
 
 def updateData():
     config = load_conf_file(args.config)
     for i in config["get"]:
         load(urlparse(i))
-    print(objects.keys())
-        
-
-    
-
-
+  
 env = Environment(loader=FileSystemLoader(
     []), trim_blocks=True, lstrip_blocks=True)
 
