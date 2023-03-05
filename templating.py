@@ -3,9 +3,7 @@
 import argparse
 import traceback
 import sys
-import json
 import os
-import glob
 import errno
 
 import netaddr
@@ -14,7 +12,6 @@ import requests
 from pathlib import Path
 
 import yaml
-from yaml import SafeLoader
 from urllib.parse import urlparse
 
 from flask import Flask, request
