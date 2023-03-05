@@ -6,6 +6,7 @@ import sys
 import json
 import os
 import glob
+import errno
 
 import netaddr
 import requests
@@ -31,7 +32,7 @@ def try_as(loader, s, on_error):
         return False
 
 def is_yaml(s):
-    return try_as(yaml.safe_load, s, yaml.scanner.ScannerError)
+    return try_as(yaml.cSafeLoader, s, yaml.scanner.ScannerError)
 
 def createObjName(i):
     return str(Path(*Path(os.path.splitext(i)[0]).parts[-2:]))
@@ -40,7 +41,7 @@ def loadFile(file):
     if is_yaml:
         pass
     else:
-        sys.exit("File is not either JSON or YAML, exiting")
+        raise ValueError(f'Failed to load {file}. Not a JSON or YAML formatted file')
     with open(file, 'r') as f:
         d = yaml.load(f.read(), Loader=yaml.CSafeLoader)
         objects[createObjName(file)] = d
@@ -59,12 +60,17 @@ def loadUri(u):
 
 def load(i):
     if i.scheme == "file":
-        path = os.path.normpath(os.getcwd() + i.path)
+        path = i.netloc + i.path
+        if not os.path.isabs(path):
+            path = os.path.normpath(os.getcwd() + i.path)
         if os.path.isdir(path):
-            for subdir, dirs, file in os.walk(path):
-                    loadFile(os.path.join(subdir, file))
+            for subdir, dirs, files in os.walk(path):
+                    for file in files:
+                        loadFile(os.path.join(subdir, file))
         elif os.path.isfile(path):
             loadFile(path)
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
     elif i.scheme == "https" or i.scheme == "http":
         loadUri(i)
 
@@ -78,7 +84,7 @@ def updateData():
     config = load_conf_file(args.config)
     for i in config["get"]:
         load(urlparse(i))
-  
+ 
 env = Environment(loader=FileSystemLoader(
     []), trim_blocks=True, lstrip_blocks=True)
 
@@ -120,6 +126,10 @@ def root_get(path):
         return f'Templating of "{path}" failed to render. Most likely due to an error in the template. Error transcript:\n\n{err}\n----\n\n{traceback.format_exc()}\n', 400
     except requests.exceptions.HTTPError as err:
         return f'HTTP error from gondul: {err}', 500
+    except FileNotFoundError as err:
+        return f'File error: {err}', 500
+    except ValueError as err:
+        return f'Parsing Error: {err}', 500
     except Exception as err:
         return f'Uncaught error: {err}', 500
     return body, 200
@@ -127,8 +137,8 @@ def root_get(path):
 
 @app.route("/<path>", methods=["POST"])
 def root_post(path):
-    updateData()
     try:
+        updateData()
         content = request.stream.read(int(request.headers["Content-Length"]))
         template = env.from_string(content.decode("utf-8"))
         body = template.render(objects=objects, options=request.args)
@@ -158,5 +168,4 @@ if not sys.argv[1:]:
     parser.print_help()
     sys.exit(1)
 
-updateData()
 app.run(host=args.host, port=args.port, debug=args.debug)

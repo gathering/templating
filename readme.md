@@ -10,7 +10,7 @@ This however opens up for possible name collisions from files and http api data.
 
 Example:
 
-```
+```yaml
 ---
 get:
   - file:///root/templating/data/read/networks.yaml
@@ -34,6 +34,7 @@ Therefor, think twice when naming things :)
 - `file://`
   - Can be both a file, or a folder
   - We will attempt to load all files found recursively
+  - Can be relative path
 - `https://` and `http://`
   - Gets data from API endpoint
 
@@ -43,11 +44,19 @@ Therefor, think twice when naming things :)
 ---
 get:
   - file:///root/templating/data
+  # Relative Path is also supported
+  - file://./templating/data
   - https://<USER:PW>@gondul.tg23.gathering.org/api/read/networks
+  - http://gondul.tg23.gathering.org/api/public/switches
 ```
 
 ## Example Execute
 
-```
+```bash
 python3 templating.py -t ../tech-templates/ -c config.yaml
 ```
+
+## Mitigate SSTI Vulnerability
+
+This service exposes a api endpoit where you can POST a template and have it rendered.
+To mitigate the obvious SSTI this creates, please but the endpoint behind authentication.
