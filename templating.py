@@ -82,8 +82,7 @@ def updateData():
     for i in config["get"]:
         load(urlparse(i))
  
-env = Environment(loader=FileSystemLoader(
-    []), trim_blocks=True, lstrip_blocks=True)
+env = Environment(extensions=['jinja2.ext.do'], loader=FileSystemLoader([]), trim_blocks=True, lstrip_blocks=True)
 
 env.filters["netmask"] = lambda ip: netaddr.IPNetwork(ip).netmask
 env.filters["cidr"] = lambda ip: netaddr.IPNetwork(ip).prefixlen
