@@ -110,16 +110,19 @@ def add_header(response):
 
 @app.route("/<path>", methods=["GET"])
 def root_get(path):
+    return render_template(path, options=request.args)
+
+def render_template(tpl, options):
     try:
         updateData()
-        template = env.get_template(path)
-        body = template.render(objects=objects, options=request.args)
-    except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as error:
+        template = env.get_template(tpl)
+        body = template.render(objects=objects, options=options)
+    except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as err:
         return f'Timeout or connection error from gondul: {err}', 500
     except TemplateNotFound:
-        return f'Template "{path}" not found\n', 404
+        return f'Template "{tpl}" not found\n', 404
     except TemplateError as err:
-        return f'Templating of "{path}" failed to render. Most likely due to an error in the template. Error transcript:\n\n{err}\n----\n\n{traceback.format_exc()}\n', 400
+        return f'Templating of "{tpl}" failed to render. Most likely due to an error in the template. Error transcript:\n\n{err}\n----\n\n{traceback.format_exc()}\n', 400
     except requests.exceptions.HTTPError as err:
         return f'HTTP error from gondul: {err}', 500
     except FileNotFoundError as err:
@@ -156,6 +159,12 @@ parser.add_argument("--debug", action="store_true",
                     help="enable debug mode")
 parser.add_argument("-x", "--timeout", type=int, default=2,
                     help="gondul server timeout")
+parser.add_argument("-o", "--once", type=str, default="",
+                    help="Run once with the provided template")
+parser.add_argument("-i", "--options", type=str, default="", nargs="+",
+                    help="Options to send to template, like query params in the API")
+parser.add_argument("-f", "--outfile", type=str, default="",
+                    help="Output file, otherwise prints to stdout")
 
 args = parser.parse_args()
 env.loader.searchpath = args.templates
@@ -163,5 +172,18 @@ env.loader.searchpath = args.templates
 if not sys.argv[1:]:
     parser.print_help()
     sys.exit(1)
+
+if args.once:
+    options = {}
+    for option in args.options:
+        key, value = option.split('=')
+        options[key] = value
+    body, _ = render_template(args.once, options=options)
+    if args.outfile:
+        with open(args.outfile, 'w') as f:
+            f.write(body)
+    else:
+        print(body)
+    sys.exit(0)
 
 app.run(host=args.host, port=args.port, debug=args.debug)
