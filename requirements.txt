@@ -1,6 +1,6 @@
 netaddr
 requests
 flask
-pynetbox
 aiohttp
 aiofiles
+pyyaml

@@ -10,9 +10,7 @@ import aiohttp
 import asyncio
 
 import netaddr
-import requests
 
-import time
 import aiofiles
 
 from pathlib import Path
