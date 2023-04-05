@@ -15,3 +15,6 @@ get:
   - https://<USER:PW>@gondul.tg23.gathering.org/api/public/ping
   - https://<USER:PW>@gondul.tg23.gathering.org/api/public/switches
   - https://<USER:PW>@gondul.tg23.gathering.org/api/public/switch-state
+  - 'https://netbox.tg23.gathering.org/api/ipam/ip-addresses?exclude=config_context&format=json&limit=0':
+      headers:
+        Authorization: 'Token <TOKEN>'

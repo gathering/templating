@@ -6,8 +6,14 @@ import sys
 import os
 import errno
 
+import aiohttp
+import asyncio
+
 import netaddr
 import requests
+
+import time
+import aiofiles
 
 from pathlib import Path
 
@@ -34,53 +40,111 @@ def is_yaml(s):
 def createObjName(i):
     return str(Path(*Path(os.path.splitext(i)[0]).parts[-2:]))
 
-def loadFile(file):
-    if is_yaml:
-        pass
+def parseFile(i):
+    path = i.netloc + i.path
+    if not os.path.isabs(path):
+        path = os.path.normpath(os.getcwd() + i.path)
+    if os.path.isdir(path):
+        for subdir, dirs, files in os.walk(path):
+              for file in files:
+                   return os.path.join(subdir, file)
+    elif os.path.isfile(path):
+        return path
     else:
-        raise ValueError(f'Failed to load {file}. Not a JSON or YAML formatted file')
-    with open(file, 'r') as f:
-        d = yaml.load(f.read(), Loader=yaml.CSafeLoader)
-        objects[createObjName(file)] = d
-
-def getEndpoint(uri: str) -> dict:
-    """
-    Fetches an endpoint and returns the data as a dict.
-    """
-    r = requests.get(uri, timeout=args.timeout)
-    r.raise_for_status()
-    return r.json()
-
-def loadUri(u):
-    a = '/'.join(u.path.split('/')[-2:])
-    objects[a] = getEndpoint(u.geturl())
-
-def load(i):
-    if i.scheme == "file":
-        path = i.netloc + i.path
-        if not os.path.isabs(path):
-            path = os.path.normpath(os.getcwd() + i.path)
-        if os.path.isdir(path):
-            for subdir, dirs, files in os.walk(path):
-                    for file in files:
-                        loadFile(os.path.join(subdir, file))
-        elif os.path.isfile(path):
-            loadFile(path)
-        else:
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-    elif i.scheme == "https" or i.scheme == "http":
-        loadUri(i)
-
+        raise FileNotFoundError(
+            errno.ENOENT, os.strerror(errno.ENOENT), path)
 
 def load_conf_file(config_file):
    with open(config_file, "r") as f:
        config = yaml.load(f.read(), Loader=yaml.CSafeLoader)
    return config
 
+
+async def getEndpoint(session, url, **options):
+    async with session.get(url, timeout=args.timeout, **options) as resp:
+        try:
+            resp_body = await resp.json(content_type=None)
+        except:
+            resp.raise_for_status()
+        return url, resp_body
+
+
+async def loadUrls(urls):
+    async with aiohttp.ClientSession() as session:
+
+        tasks = []
+        for i in urls:
+            options = dict(list(i.values())[0])
+            url = list(i.keys())[0]
+            tasks.append(asyncio.ensure_future(getEndpoint(session, url, **options)))
+
+        responses = await asyncio.gather(*tasks)
+        for response in responses:
+            key = '/'.join(urlparse(response[0]).path.split('/')[-2:])
+            objects[key] = response[1]
+    return 1
+
+
+async def readFile(file):
+    async with aiofiles.open(file, mode='r') as f:
+        content = await f.read()
+        out = yaml.load(content, Loader=yaml.CSafeLoader)
+        return file, out
+
+async def loadFiles(files):
+    tasks = []
+    for file in files:
+        options = list(file.values())[0]
+        file = list(file.keys())[0]
+        if is_yaml:
+            pass
+        else:
+            raise ValueError(
+                f'Failed to load {file}. Not a JSON or YAML formatted file')
+        tasks.append(asyncio.ensure_future(readFile(file)))
+
+    contents = await asyncio.gather(*tasks)
+    for content in contents:
+        objects[createObjName(content[0])] = content[1]
+    return 1
+
+
+async def runTasks(tasks):
+    await asyncio.gather(*tasks)
+
+
 def updateData():
+
     config = load_conf_file(args.config)
-    for i in config["get"]:
-        load(urlparse(i))
+
+    files = []
+    urls = []
+    for item in config["get"]:
+        if isinstance(item, dict):
+            pass
+        elif isinstance(item, str):
+            item = {item: ''}
+        else:
+            sys.exit(f"{item} is not a str, or dict. Exit")
+        
+        options = list(item.values())[0]
+        item = list(item.keys())[0]
+        item = urlparse(item)
+
+        if item.scheme == "file":
+            d = {parseFile(item): options}
+            files.append(d)
+        elif item.scheme == "https" or item.scheme == "http":
+            item = item.geturl()
+            d = {item: options}
+            urls.append(d)
+
+
+    tasks = []
+    tasks.append(loadUrls(urls))
+    tasks.append(loadFiles(files))
+    asyncio.run(runTasks(tasks))
+
  
 env = Environment(extensions=['jinja2.ext.do'], loader=FileSystemLoader([]), trim_blocks=True, lstrip_blocks=True)
 
@@ -117,19 +181,18 @@ def render_template(tpl, options):
         updateData()
         template = env.get_template(tpl)
         body = template.render(objects=objects, options=options)
-    except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as err:
-        return f'Timeout or connection error from gondul: {err}', 500
+    except (aiohttp.client_exceptions.ClientConnectorError, aiohttp.client_exceptions.ClientResponseError) as err:
+        return f'Connection error trying to get: {err}', 500
     except TemplateNotFound:
         return f'Template "{tpl}" not found\n', 404
     except TemplateError as err:
         return f'Templating of "{tpl}" failed to render. Most likely due to an error in the template. Error transcript:\n\n{err}\n----\n\n{traceback.format_exc()}\n', 400
-    except requests.exceptions.HTTPError as err:
-        return f'HTTP error from gondul: {err}', 500
     except FileNotFoundError as err:
         return f'File error: {err}', 500
     except ValueError as err:
         return f'Parsing Error: {err}', 500
     except Exception as err:
+        print(traceback.format_exc())
         return f'Uncaught error: {err}', 500
     return body, 200
 
@@ -157,7 +220,7 @@ parser.add_argument("-h", "--host", type=str,
 parser.add_argument("-p", "--port", type=int, default=8080, help="host port")
 parser.add_argument("--debug", action="store_true",
                     help="enable debug mode")
-parser.add_argument("-x", "--timeout", type=int, default=2,
+parser.add_argument("-x", "--timeout", type=int, default=20,
                     help="gondul server timeout")
 parser.add_argument("-o", "--once", type=str, default="",
                     help="Run once with the provided template")
@@ -165,9 +228,17 @@ parser.add_argument("-i", "--options", type=str, default="", nargs="+",
                     help="Options to send to template, like query params in the API")
 parser.add_argument("-f", "--outfile", type=str, default="",
                     help="Output file, otherwise prints to stdout")
+parser.add_argument("--help",  type=str, default="",
+                    help="Print help")
 
-args = parser.parse_args()
+try:
+    args = parser.parse_args()
+except:
+    parser.print_help()
+    sys.exit(0)
+
 env.loader.searchpath = args.templates
+
 
 if not sys.argv[1:]:
     parser.print_help()
