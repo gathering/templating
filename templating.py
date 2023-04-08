@@ -38,20 +38,6 @@ def is_yaml(s):
 def createObjName(i):
     return str(Path(*Path(os.path.splitext(i)[0]).parts[-2:]))
 
-def parseFile(i):
-    path = i.netloc + i.path
-    if not os.path.isabs(path):
-        path = os.path.normpath(os.getcwd() + i.path)
-    if os.path.isdir(path):
-        for subdir, dirs, files in os.walk(path):
-              for file in files:
-                   return os.path.join(subdir, file)
-    elif os.path.isfile(path):
-        return path
-    else:
-        raise FileNotFoundError(
-            errno.ENOENT, os.strerror(errno.ENOENT), path)
-
 def load_conf_file(config_file):
    with open(config_file, "r") as f:
        config = yaml.load(f.read(), Loader=yaml.CSafeLoader)
@@ -115,8 +101,8 @@ def updateData():
 
     config = load_conf_file(args.config)
 
-    files = []
-    urls = []
+    files_tasks = []
+    urls_tasks = []
     for item in config["get"]:
         if isinstance(item, dict):
             pass
@@ -130,18 +116,34 @@ def updateData():
         item = urlparse(item)
 
         if item.scheme == "file":
-            d = {parseFile(item): options}
-            files.append(d)
+            # Make this a function again, someday
+            path = item.netloc + item.path
+            if not os.path.isabs(path):
+                path = os.path.normpath(os.getcwd() + item.path)
+            if os.path.isdir(path):
+
+                for subdir, dirs, files in os.walk(path):
+                    for file in files:
+                        path = os.path.join(subdir, file)
+                        d = {path: options}
+                        files_tasks.append(d)
+            elif os.path.isfile(path):
+                d = {path: options}
+                files_tasks.append(d)
+            else:
+                raise FileNotFoundError(
+                    errno.ENOENT, os.strerror(errno.ENOENT), path)
+
         elif item.scheme == "https" or item.scheme == "http":
             item = item.geturl()
             d = {item: options}
-            urls.append(d)
-
+            urls_tasks.append(d)
 
     tasks = []
-    tasks.append(loadUrls(urls))
-    tasks.append(loadFiles(files))
+    tasks.append(loadUrls(urls_tasks))
+    tasks.append(loadFiles(files_tasks))
     asyncio.run(runTasks(tasks))
+
 
  
 env = Environment(extensions=['jinja2.ext.do'], loader=FileSystemLoader([]), trim_blocks=True, lstrip_blocks=True)
